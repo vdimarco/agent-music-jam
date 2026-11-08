@@ -2,6 +2,9 @@ import {AudioEngine,roles} from './audio.js';
 const $=s=>document.querySelector(s), token=location.hash.slice(1)||sessionStorage.getItem('jam-token');
 if(token)sessionStorage.setItem('jam-token',token);history.replaceState(null,'',location.pathname);
 const pendingKeys=new Set();
+let takeProtected=true,storedTakeId=null,takeStarted=null,keeping=false,guardResolve=null,lastTimelineBar=null;
+const durationLabel=seconds=>`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(Math.floor(seconds%60)).padStart(2,'0')}`;
+
 const owner=crypto.randomUUID(),audio=new AudioEngine();let state=null,playing=false,busy=false,nextBar=0,nextTime=0,timeline=[],take=[],generation=0,requesting=false,currentBar=null,polling=false,takeStop=null,settingsLoaded=false,stopping=false;let mixLog=[];
 const names={drums:'Drums',bass:'Bass',keys:'Keys',lead:'Lead'}, phrase=[],held=new Map(),deferred=new Set();let sustain=false;
 const status=text=>{$('#status').textContent=text;};
@@ -15,14 +18,15 @@ function buildTracks(){for(const r of roles){const article=document.createElemen
   article.querySelectorAll('[data-control]').forEach(input=>input.onchange=()=>api('configure',{role:r,controls:{[input.dataset.control]:+input.value}}).then(()=>status(`${names[r]} change waiting for the audio buffer.`)).catch(report));$('#musicians').append(article);}}
 function renderState(s){state=s;if(!settingsLoaded&&s.session.browser){applySettings(s.session.browser);settingsLoaded=true;}$('#mode').textContent=s.mode;$('#tempo').value=s.session.tempo;$('#tempo').disabled=playing;for(const r of roles){const track=$(`[data-role=${r}]`),rs=s.session.roles[r];if(!playing)track.querySelector('.intention').textContent=rs.intention;track.querySelectorAll('[data-control]').forEach(input=>{if(document.activeElement!==input)input.value=rs.controls[input.dataset.control];});}
  const jobs=s.jobs.slice(-4).reverse();if(jobs.length){$('#changes').replaceChildren(...jobs.map(job=>{const li=document.createElement('li');li.textContent=`${job.direction} — ${job.status}${job.activations.length?' · '+job.activations.map(a=>`${names[a.role]} bar ${a.bar}`).join(', '):''}`;return li;}));const job=jobs[0];status(`${job.status}${job.activations.length?' · '+job.activations.map(a=>`${names[a.role]} at bar ${a.bar}`).join(', '):''}`);}else {const li=document.createElement('li');li.textContent='Your next idea starts here.';$('#changes').replaceChildren(li);if(!playing)status('Ready. Press Play to hear the band.');}if(!playing)$('#bar').textContent='Bar —';
+ renderTimeline();
  if(playing&&(!s.playing||s.generation!==generation))stop(false);for(const action of s.actions||[])if(action.type==='export')exportTake(action.format).catch(report);
 }
 async function poll(){if(polling)return;polling=true;try{renderState(await api('status',{owner}));}catch(e){report(e);}finally{polling=false;}}
-async function play(){if(playing||busy||stopping)return;busy=true;$('#play').disabled=true;try{await audio.init();const start=await api('start',{owner});generation=start.generation;nextBar=start.next_bar;nextTime=audio.ctx.currentTime+.3;timeline=[];take=[];phrase.length=0;takeStop=null;playing=true;document.body.classList.add('is-playing');mixLog=[];logMix();audio.begin();await fill(3);$('#play span').textContent='Playing';$('#engine').textContent='Three bars ahead · previous pattern repeats during planning';status('Playing — in the pocket.');}catch(e){report(e);await stop();}finally{busy=false;$('#play').disabled=false;}}
+async function play(){if(playing||busy||stopping||keeping||guardResolve)return;busy=true;if(!await protectTake()){busy=false;return;}$('#play').disabled=true;try{await audio.init();const start=await api('start',{owner});generation=start.generation;nextBar=start.next_bar;nextTime=audio.ctx.currentTime+.3;timeline=[];take=[];phrase.length=0;takeStop=null;playing=true;document.body.classList.add('is-playing');mixLog=[];logMix();audio.begin();takeProtected=false;storedTakeId=null;takeStarted=new Date();await fill(3);$('#play span').textContent='Playing';$('#engine').textContent='Three bars ahead · previous pattern repeats during planning';status('Playing — in the pocket.');}catch(e){report(e);await stop();}finally{busy=false;$('#play').disabled=false;}}
 async function fill(count=1){if(!playing||requesting)return;requesting=true;const expected=generation;try{const result=await api('bars',{owner,start:nextBar,count});if(!playing||generation!==expected||result.generation!==expected)return;for(const bar of result.bars){if(nextTime<audio.ctx.currentTime+.025){audio.metrics.late++;nextTime=audio.ctx.currentTime+.08;status('Audio buffer recovered after a browser stall.');}const record={...bar,time:nextTime,end:nextTime+240/bar.tempo};timeline.push(record);take.push(structuredClone(record));audio.schedule(bar,nextTime);nextTime=record.end;nextBar++;}}catch(e){report(e);}finally{requesting=false;}}
 async function stop(remote=true){if(stopping||(busy&&!playing))return;stopping=true;$('#play').disabled=true;playing=false;document.body.classList.remove('is-playing');document.querySelectorAll('.beat-lights i').forEach(e=>e.classList.remove('lit'));takeStop=audio.ctx?.currentTime||0;for(const pitch of [...held.keys()])release(pitch,true);sustain=false;deferred.clear();await audio.stop();if(remote)try{await api('stop');}catch(e){report(e);}$('#play span').textContent='Play';$('#tempo').disabled=false;$('#engine').textContent='Stopped · all voices released';$('#timing').textContent='Audio clock ready';document.querySelectorAll('.step').forEach(e=>e.classList.remove('sounding'));status('Stopped. Your take is ready to export.');stopping=false;$('#play').disabled=false;}
 function clock(){const now=audio.ctx?.currentTime||0,b=timeline.find(b=>now>=b.time&&now<b.end);return {bar:b?.bar??-1,beat:b?Math.min(3.999,(now-b.time)*b.tempo/60):0,audio_time:now,late_events:audio.metrics.late};}
-function animate(){if(playing){const now=audio.ctx.currentTime,bar=timeline.find(b=>now>=b.time&&now<b.end);if(bar){currentBar=bar;document.querySelectorAll('.beat-lights i').forEach((e,i)=>e.classList.toggle('lit',i===Math.floor((now-bar.time)*bar.tempo/60)%4));$('#bar').textContent=`Bar ${String(bar.bar+1).padStart(2,'0')}`;for(const r of roles){const track=$(`[data-role=${r}]`);track.querySelector('.intention').textContent=bar.roles[r].intention;const steps=track.querySelectorAll('.step');steps.forEach((step,i)=>{step.classList.toggle('on',bar.roles[r].events.some(e=>Math.floor(e.beat*4)===i));step.classList.toggle('sounding',audio.audible(r)&&audio.events.some(e=>e.role===r&&e.bar===bar.bar&&e.step===i&&e.time<=now&&e.end>now));});}}$('#timing').textContent=`${audio.metrics.late} late · ${Math.max(0,nextTime-now).toFixed(1)}s buffered`;if(audio.recordingFull)status('15-minute WAV recording limit reached; stop and export this take.');}requestAnimationFrame(animate);}
+function animate(){updateTakeUI();if(playing){const now=audio.ctx.currentTime,bar=timeline.find(b=>now>=b.time&&now<b.end);if(bar){currentBar=bar;if(lastTimelineBar!==bar.bar)renderTimeline();document.querySelectorAll('.beat-lights i').forEach((e,i)=>e.classList.toggle('lit',i===Math.floor((now-bar.time)*bar.tempo/60)%4));$('#bar').textContent=`Bar ${String(bar.bar+1).padStart(2,'0')}`;for(const r of roles){const track=$(`[data-role=${r}]`);track.querySelector('.intention').textContent=bar.roles[r].intention;const steps=track.querySelectorAll('.step');steps.forEach((step,i)=>{step.classList.toggle('on',bar.roles[r].events.some(e=>Math.floor(e.beat*4)===i));step.classList.toggle('sounding',audio.audible(r)&&audio.events.some(e=>e.role===r&&e.bar===bar.bar&&e.step===i&&e.time<=now&&e.end>now));});}}$('#timing').textContent=`${audio.metrics.late} late · ${Math.max(0,nextTime-now).toFixed(1)}s buffered`;if(audio.recordingFull)status('15-minute WAV recording limit reached; stop and export this take.');}requestAnimationFrame(animate);}
 async function direction(text){if(!text.trim())return;status('Planning — the groove keeps playing.');try{await api('direction',{text});$('#direction').value='';await poll();}catch(e){report(e);}}
 function recordNote(pitch,h){const duration=Math.min(4,Math.max(.04,(audio.ctx.currentTime-h.time)*(state?.session.tempo||92)/60));const note={pitch,bar:Math.max(0,h.clock.bar),beat:h.clock.beat,duration:Math.min(duration,4-h.clock.beat),velocity:h.velocity};phrase.push(note);if(phrase.length>64)phrase.shift();const bar=take.find(b=>b.bar===note.bar);if(bar)bar.human.push(note);$('#phrase-status').textContent=`${phrase.length} notes in your phrase`;api('human',{events:phrase}).catch(report);}
 async function press(pitch,velocity=.7){if(held.has(pitch)||pendingKeys.has(pitch))return;pendingKeys.add(pitch);await audio.init();if(!pendingKeys.delete(pitch)||held.has(pitch))return;const voice=audio.note('human',{pitch,velocity,articulation:'normal'},audio.ctx.currentTime+.005,8);held.set(pitch,{voice,time:audio.ctx.currentTime,clock:clock(),velocity});document.querySelector(`[data-pitch="${pitch}"]`)?.classList.add('pressed');}
@@ -39,11 +43,92 @@ function logMix(){saveSettings();mixLog.push({time:audio.ctx?.currentTime||0,mix
 function mixAt(time){return mixLog.findLast(x=>x.time<=time)?.mix||audio.mix;}
 function audibleAt(role,time){const m=mixAt(time);return !m[role].mute&&(!roles.some(r=>m[r].solo)||m[role].solo);}
 function performedBars(){const end=takeStop??audio.ctx?.currentTime??0;return take.filter(b=>b.time<end).map(b=>{const out=structuredClone(b),beats=Math.min(4,(end-b.time)*b.tempo/60);for(const r of roles)out.roles[r].events=out.roles[r].events.filter(e=>e.beat<beats&&audibleAt(r,b.time+e.beat*60/b.tempo)).map(e=>{const onset=b.time+e.beat*60/b.tempo,cut=mixLog.find(x=>x.time>onset&&!audibleAt(r,x.time));return {...e,velocity:e.velocity*mixAt(onset)[r].volume,duration:Math.max(.04,Math.min(e.duration,beats-e.beat,cut?(cut.time-onset)*b.tempo/60:4))};}).filter(e=>e.velocity>=.01);return out;});}
-async function exportTake(format){if(format==='wav'){if(playing)await stop();download(audio.wav(),'agent-music-jam.wav');$('#recording-info').textContent=`Recorded mono PCM WAV · ${audio.ctx.sampleRate} Hz · ${(audio.samples/audio.ctx.sampleRate).toFixed(1)} seconds`;return;}const bars=performedBars();if(!bars.length)throw Error('Play a jam before exporting MIDI.');const result=await api('export',{bars});download(new Blob([Uint8Array.from(atob(result.base64),c=>c.charCodeAt(0))],{type:result.format}),result.filename);}
-$('#play').onclick=play;$('#stop').onclick=()=>stop();$('#direction-form').onsubmit=e=>{e.preventDefault();direction($('#direction').value);};document.querySelectorAll('[data-prompt]').forEach(b=>b.onclick=()=>direction(b.dataset.prompt));$('#space').onclick=()=>direction('Leave space for my solo for four bars, then bring the band back.');$('#answer').onclick=()=>{if(!phrase.length)return status('Play a phrase first so the bass has something to answer.');direction('Have the bass answer my melody.');};$('#undo').onclick=()=>api('undo',{role:$('#undo-role').value}).then(r=>status(r.status)).catch(report);$('#save').onclick=()=>api('save',{browser:{mix:audio.mix,sounds:audio.sounds}}).then(s=>{s.browser={mix:audio.mix,sounds:audio.sounds};download(new Blob([JSON.stringify(s,null,2)],{type:'application/json'}),'agent-music-jam.json');status('Complete session saved.');}).catch(report);$('#restore').onclick=()=>$('#restore-file').click();$('#restore-file').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>8_000_000)throw Error('Session file exceeds 8 MB');const data=JSON.parse(await file.text());await stop();await api('restore',{session:data});take=[];timeline=[];settingsLoaded=false;if(data.browser?.mix)for(const r of [...roles,'human']){const m=data.browser.mix[r];if(m&&typeof m.volume==='number'&&m.volume>=0&&m.volume<=1)audio.mix[r]={volume:m.volume,mute:!!m.mute,solo:!!m.solo};}if(data.browser?.sounds)for(const r of ['keys','human']){const sound=data.browser.sounds[r];if(sound&&['piano','electric','organ','pad','pluck'].includes(sound.instrument)&&Number.isFinite(sound.tone)&&sound.tone>=0&&sound.tone<=1){audio.setSound(r,sound);$('#'+r+'-instrument').value=sound.instrument;$('#'+r+'-tone').value=sound.tone;}}audio.updateMix();await poll();status('Session restored, stopped. Press Play when ready.');}catch(err){report(err);}finally{e.target.value='';}};$('#new').onclick=async()=>{await stop();await api('new');take=[];timeline=[];settingsLoaded=false;await poll();};$('#tempo').onchange=()=>api('tempo',{tempo:+$('#tempo').value}).catch(report);$('#export').onclick=()=>$('#exports').showModal();$('#midi-export').onclick=()=>exportTake('midi').catch(report);$('#wav-export').onclick=()=>exportTake('wav').catch(report);
+async function exportTake(format){if(format==='wav'){if(playing)await stop();download(audio.wav(),'agent-music-jam.wav');takeProtected=true;$('#recording-info').textContent=`Recorded mono PCM WAV · ${audio.ctx.sampleRate} Hz · ${(audio.samples/audio.ctx.sampleRate).toFixed(1)} seconds`;return;}const bars=performedBars();if(!bars.length)throw Error('Play a jam before exporting MIDI.');const result=await api('export',{bars});download(new Blob([Uint8Array.from(atob(result.base64),c=>c.charCodeAt(0))],{type:result.format}),result.filename);}
+$('#play').onclick=play;$('#stop').onclick=()=>stop();$('#direction-form').onsubmit=e=>{e.preventDefault();direction($('#direction').value);};document.querySelectorAll('[data-prompt]').forEach(b=>b.onclick=()=>direction(b.dataset.prompt));$('#space').onclick=()=>direction('Leave space for my solo for four bars, then bring the band back.');$('#answer').onclick=()=>{if(!phrase.length)return status('Play a phrase first so the bass has something to answer.');direction('Have the bass answer my melody.');};$('#undo').onclick=()=>api('undo',{role:$('#undo-role').value}).then(r=>status(r.status)).catch(report);$('#save').onclick=()=>api('save',{browser:{mix:audio.mix,sounds:audio.sounds}}).then(s=>{s.browser={mix:audio.mix,sounds:audio.sounds};download(new Blob([JSON.stringify(s,null,2)],{type:'application/json'}),'agent-music-jam.json');status('Complete session saved.');}).catch(report);$('#restore').onclick=()=>$('#restore-file').click();$('#restore-file').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>8_000_000)throw Error('Session file exceeds 8 MB');const data=JSON.parse(await file.text());await stop();if(!await protectTake())return;await api('restore',{session:data});clearTake();take=[];timeline=[];settingsLoaded=false;if(data.browser?.mix)for(const r of [...roles,'human']){const m=data.browser.mix[r];if(m&&typeof m.volume==='number'&&m.volume>=0&&m.volume<=1)audio.mix[r]={volume:m.volume,mute:!!m.mute,solo:!!m.solo};}if(data.browser?.sounds)for(const r of ['keys','human']){const sound=data.browser.sounds[r];if(sound&&['piano','electric','organ','pad','pluck'].includes(sound.instrument)&&Number.isFinite(sound.tone)&&sound.tone>=0&&sound.tone<=1){audio.setSound(r,sound);$('#'+r+'-instrument').value=sound.instrument;$('#'+r+'-tone').value=sound.tone;}}audio.updateMix();await poll();status('Session restored, stopped. Press Play when ready.');}catch(err){report(err);}finally{e.target.value='';}};$('#new').onclick=async()=>{try{if(busy||stopping||keeping||guardResolve)return;await stop();if(!await protectTake())return;await api('new');clearTake();take=[];timeline=[];settingsLoaded=false;await poll();}catch(e){report(e);}};$('#tempo').onchange=()=>api('tempo',{tempo:+$('#tempo').value}).catch(report);$('#export').onclick=()=>$('#exports').showModal();$('#midi-export').onclick=()=>exportTake('midi').catch(report);$('#wav-export').onclick=()=>exportTake('wav').catch(report);
 // Expose read-only diagnostics for reproducible audio-clock verification.
 window.jamDiagnostics=()=>({playing,clock:clock(),metrics:{...audio.metrics},bufferedSeconds:audio.ctx?nextTime-audio.ctx.currentTime:0,voices:audio.voices.size,samples:audio.samples,takeBars:take.length});
 buildTracks();buildKeyboard();$('#human-instrument').onchange=e=>{audio.setSound('human',{instrument:e.target.value});saveSettings();};$('#human-tone').oninput=e=>audio.setSound('human',{tone:+e.target.value});$('#human-tone').onchange=saveSettings;poll();setInterval(poll,700);setInterval(()=>{if(playing)api('heartbeat',{owner,clock:clock()}).then(s=>{if(!s.playing||s.generation!==generation)stop(false);}).catch(report);},500);requestAnimationFrame(animate);
 
 // Scheduling continues when requestAnimationFrame is throttled in a background tab.
 setInterval(()=>{if(playing&&audio.ctx?.state==='running'&&nextTime-audio.ctx.currentTime<480/(state?.session.tempo||92))fill();},100);
+
+function updateTakeUI(){
+  const seconds=audio.ctx?audio.samples/audio.ctx.sampleRate:0;
+  $('#take-timer').textContent=durationLabel(seconds);
+  $('#take-state').textContent=keeping?'Saving…':playing?(audio.recordingFull?'Recording limit reached':'Recording'):(seconds?(storedTakeId?'Saved to take shelf':takeProtected?'WAV exported':'Unsaved take'):'Ready to record');
+  $('#take-indicator').classList.toggle('recording',playing&&!audio.recordingFull);
+  $('#keep-take').disabled=!seconds||keeping||!!storedTakeId||busy||stopping;
+}
+function clearTake(){audio.chunks=[];audio.samples=0;takeProtected=true;storedTakeId=null;takeStarted=null;currentBar=null;}
+function renderTimeline(){
+  if(!state)return;
+  const live=playing?clock().bar:-1,start=live>=0?live:state.session.next_bar;
+  lastTimelineBar=live;
+  $('#timeline-state').textContent=live>=0?'FOLLOWING THE AUDIO CLOCK':'NEXT ON PLAY';
+  $('#chords').replaceChildren(...Array.from({length:4},(_,i)=>{
+    const cell=document.createElement('div'),label=document.createElement('span'),chord=document.createElement('strong');
+    cell.className='chord'+(live>=0&&i===0?' current':'');
+    if(live>=0&&i===0)cell.setAttribute('aria-current','true');
+    label.textContent=`${live>=0&&i===0?'NOW · ':''}BAR ${start+i+1}`;
+    chord.textContent=state.session.progression[(start+i)%4].replace('Bb','B♭');cell.append(label,chord);return cell;
+  }));
+  const confirmed=state.session.arrangement.filter(a=>Number.isInteger(a.bar)&&a.bar>=start).slice(0,4);
+  const messages=confirmed.map(a=>`${names[a.role]||'Part'} · bar ${a.bar+1}${a.bar===live?' now':' confirmed'}`);
+  if(state.session.pending.length)messages.push(`${state.session.pending.length} changes waiting for the audio buffer`);
+  if(state.jobs.some(j=>j.status==='planning'))messages.push('Musicians planning');
+  const text=messages.join(' / ')||'No upcoming changes.';
+  if($('#arrangement').textContent!==text)$('#arrangement').textContent=text;
+}
+$('#performance-mode').onclick=()=>{
+  const enabled=document.body.classList.toggle('performance');$('#performance-mode').setAttribute('aria-pressed',enabled);$('#performance-mode').textContent=enabled?'Studio view':'Performance mode';
+  window.scrollTo({top:0,behavior:'instant'});
+};
+$('#show-band').onclick=()=>{const shown=document.body.classList.toggle('show-band');$('#show-band').setAttribute('aria-expanded',shown);$('#show-band').textContent=shown?'Hide band controls':'Show band controls';};
+// Browser storage is scoped to this loopback origin; downloads remain the portable backup.
+function openTakeDB(){return new Promise((resolve,reject)=>{
+  const request=indexedDB.open('agent-music-jam-takes',1);
+  request.onupgradeneeded=()=>request.result.createObjectStore('takes',{keyPath:'id'});
+  request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
+});}
+async function listTakes(){const db=await openTakeDB();try{return await new Promise((resolve,reject)=>{
+  const tx=db.transaction('takes','readonly'),request=tx.objectStore('takes').getAll();
+  tx.oncomplete=()=>resolve(request.result.sort((a,b)=>b.created.localeCompare(a.created)));tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+});}finally{db.close();}}
+async function writeTake(record){const db=await openTakeDB();try{await new Promise((resolve,reject)=>{
+  const tx=db.transaction('takes','readwrite'),store=tx.objectStore('takes'),request=store.getAll();let reason;
+  request.onsuccess=()=>{const takes=request.result,bytes=takes.reduce((n,t)=>n+t.wav.size+t.midi.size,0)+record.wav.size+record.midi.size;
+    if(takes.length>=10||bytes>100*1024*1024){reason=Error('Take shelf full (10 takes / 100 MB). Download this WAV, or remove an older saved take.');tx.abort();return;}store.add(record);};
+  tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(reason||tx.error||Error('Could not store take. Download WAV instead.'));
+});}finally{db.close();}}
+async function saveCurrentTake(){
+  if(keeping)throw Error('A take is already being saved.');
+  keeping=true;
+  try{if(playing)await stop();if(!audio.samples)throw Error('Play a jam before keeping a take.');
+    const result=await api('export',{bars:performedBars()}),stamp=takeStarted||new Date();
+    const id=crypto.randomUUID();await writeTake({id,created:stamp.toISOString(),name:`Take · ${stamp.toLocaleString()}`,duration:audio.samples/audio.ctx.sampleRate,wav:audio.wav(),midi:new Blob([Uint8Array.from(atob(result.base64),c=>c.charCodeAt(0))],{type:'audio/midi'})});
+    takeProtected=true;storedTakeId=id;status('Take kept in this browser. Download it for a permanent backup.');
+  }finally{keeping=false;updateTakeUI();}
+}
+function protectTake(){
+  if(takeProtected||!audio.samples)return Promise.resolve(true);
+  if(guardResolve)return Promise.resolve(false);
+  $('#protect-error').textContent='';$('#protect-take').showModal();
+  return new Promise(resolve=>{guardResolve=resolve;});
+}
+function finishGuard(continueAction){$('#protect-take').close();const resolve=guardResolve;guardResolve=null;resolve?.(continueAction);}
+$('#protect-cancel').onclick=()=>finishGuard(false);
+$('#protect-discard').onclick=()=>finishGuard(true);
+$('#protect-take').oncancel=e=>{e.preventDefault();if(!keeping)finishGuard(false);};
+$('#protect-save').onclick=async()=>{for(const b of $('#protect-take').querySelectorAll('button'))b.disabled=true;try{await saveCurrentTake();finishGuard(true);}catch(e){$('#protect-error').textContent=e.message||'Storage unavailable. Download WAV from Export instead.';}finally{for(const b of $('#protect-take').querySelectorAll('button'))b.disabled=false;}};
+$('#keep-take').onclick=()=>saveCurrentTake().catch(report);
+async function renderTakes(){
+  $('#take-list').replaceChildren();$('#takes-status').textContent='Loading saved takes…';
+  try{const takes=await listTakes();$('#takes-status').textContent=takes.length?`${takes.length} of 10 takes · ${(takes.reduce((n,t)=>n+t.wav.size+t.midi.size,0)/1024/1024).toFixed(1)} of 100 MB`:'No saved takes yet. Play, then choose Keep take.';
+    for(const take of takes){const li=document.createElement('li'),title=document.createElement('strong'),buttons=document.createElement('div');title.textContent=`${take.name} · ${durationLabel(take.duration)}`;li.append(title,buttons);
+      for(const format of ['wav','midi']){const button=document.createElement('button');button.textContent=`Download ${format.toUpperCase()}`;button.onclick=()=>download(take[format],`jam-${take.created.replace(/[:.]/g,'-')}.${format==='midi'?'mid':format}`);buttons.append(button);}
+      const remove=document.createElement('button');remove.textContent='Remove';remove.onclick=async()=>{if(!confirm('Remove this saved take from this browser? Download a backup first.'))return;try{const db=await openTakeDB();try{await new Promise((resolve,reject)=>{const tx=db.transaction('takes','readwrite');tx.objectStore('takes').delete(take.id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});}finally{db.close();}if(take.id===storedTakeId){storedTakeId=null;takeProtected=false;}await renderTakes();}catch(e){$('#takes-status').textContent=e.message;}};buttons.append(remove);$('#take-list').append(li);
+    }
+  }catch(e){$('#takes-status').textContent='Browser storage unavailable. Use Export to download the current take.';}
+}
+$('#open-takes').onclick=()=>{$('#takes').showModal();renderTakes();};
+window.addEventListener('beforeunload',e=>{if(!takeProtected&&audio.samples){e.preventDefault();e.returnValue='';}});

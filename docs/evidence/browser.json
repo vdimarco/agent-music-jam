@@ -3,8 +3,8 @@
     "playing": true,
     "clock": {
       "bar": 8,
-      "beat": 1.1833777777777699,
-      "audio_time": 21.941333333333333,
+      "beat": 1.167022222222216,
+      "audio_time": 21.930666666666667,
       "late_events": 0
     },
     "metrics": {
@@ -12,7 +12,7 @@
       "scheduled": 249,
       "minLead": 0.28933333333333333
     },
-    "bufferedSeconds": 7.054318840579718,
+    "bufferedSeconds": 7.064985507246384,
     "voices": 67,
     "samples": 1052672,
     "takeBars": 11

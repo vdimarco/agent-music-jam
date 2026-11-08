@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "errors": [],
+  "takePersistence": true,
+  "capacityProtection": true,
+  "overwriteCancel": true,
+  "saveAndContinue": true,
+  "discard": true,
+  "midiDoesNotProtectWav": true,
+  "timeline": true,
+  "desktopKeyboardFits": true,
+  "mobileKeyboardFits": true
+}

@@ -8,9 +8,12 @@ Three areas separate the band, the direction and the human instrument. Keys inst
 
 On narrow screens tracks stack, the keyboard precedes the conductor, and controls wrap without horizontal overflow. The native HTML controls retain visible keyboard focus and accessible names. The studio screenshot is the actual running interface. The release video documents the same audio workflow with the earlier visual theme.
 
-## Suggested next improvements (not implemented)
+## Performance workflow
 
-1. Compact performance view: keep transport and keyboard within reach while playing, with expandable musician controls.
-2. Take protection: recording duration, a visible take library and a warning before replacing an unexported recording.
-3. Chord and arrangement timeline: show the current chord and confirmed future activation bars.
-4. Musical presets: save named ensembles and sound/mix presets, followed by selectable keys and progressions.
+Performance mode brings the audio transport, a four-bar chord strip, the recording timer and the human keyboard together. It uses the existing elements and handlers so switching views does not duplicate or interrupt playback. Band controls expand on demand. Chords follow the audio clock; arrangement labels use confirmed backend activation bars, with unallocated changes clearly identified as waiting.
+
+The take shelf stores paired WAV/MIDI files in browser IndexedDB. The save dialog prevents accidental replacement and offers cancellation. Capacity failures preserve the current take. The interface states its exact-origin storage scope and recommends portable downloads.
+
+## Further improvement
+
+Named ensemble and instrument presets, followed by selectable keys and progressions, remain future work.

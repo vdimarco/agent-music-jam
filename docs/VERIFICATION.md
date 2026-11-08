@@ -63,3 +63,9 @@ Set `CHROMIUM` if the executable is not `/usr/bin/chromium`, and `PYTHON` if the
 ## Studio redesign verification
 
 The final studio interface was checked in Chromium at 1440 × 1280 and 390 × 844. Playback, visible band sound controls, instrument/tone persistence, phrase input, mute/solo, undo, WAV/MIDI downloads and restore passed. The beat indicator follows playback and clears on Stop. No page errors, mobile overflow or late events occurred (249 events). See `docs/evidence/browser.json` and `docs/screenshots/studio.png`. The performance demo predates the visual redesign.
+
+## v0.1.1 performance and take workflow
+
+`tests/performance.cjs` passed against a separate real Chromium instance at 1440 × 900 and 390 × 844. The keyboard fits the first viewport in performance mode at both sizes. Tested audio-clock chord highlighting, confirmed arrangement bars, recording duration, canceling replacement without losing samples, saving and continuing, explicit discard, real IndexedDB capacity failures preserving audio, paired WAV/MIDI downloads with valid headers, persistence through reload, and MIDI export leaving WAV protection active. No page errors or mobile horizontal overflow. `tests/browser.cjs` also passed playback, instrument/tone, mixer, undo, export and restore regression coverage (249 scheduled events, zero late events).
+
+Saved takes are explicitly scoped to the browser origin (including the service port), capped at ten takes / 100 MB, and never silently evicted by app code. Browser eviction, forced shutdown and platform-specific leave-page warning behavior are not verified. Downloads are recommended for permanent backups.

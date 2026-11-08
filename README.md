@@ -4,7 +4,7 @@ A band you can jam with: drums, bass, keys and lead, with a shared D-minor pocke
 
 ![Agent Music Jam studio](docs/screenshots/studio.png)
 
-[Download release and performance demo](https://github.com/vdimarco/agent-music-jam/releases/tag/v0.1.0). The demo shows the earlier visual theme; the screenshot shows the current studio.
+[Download release and performance demo](https://github.com/vdimarco/agent-music-jam/releases/tag/v0.1.1). The demo shows the earlier visual theme; the screenshot shows the current studio.
 
 ## Start locally
 
@@ -71,6 +71,18 @@ There are no plugin API keys. Conductor and browser musician calls use `ctx.llm.
 
 The recording contains only the app’s synthesized output. There is no microphone access or speech transcription.
 
+## Performance mode, timeline and takes
+
+**Performance mode** hides the introductory artwork and musician panels, keeping the same live transport, chord strip and keyboard within reach. Show band controls to adjust musicians; Studio view restores the full layout. Switching views never restarts audio.
+
+The four-bar chord strip follows the actual browser audio clock. Upcoming changes display confirmed bar numbers from the allocated arrangement; plans still waiting for scheduling are labelled separately. Stopped playback previews the next four bars.
+
+A recording timer displays captured audio duration. **Keep take** stops and flushes the recording, then saves WAV and MIDI together in IndexedDB. **Saved takes** downloads either format and lets you remove a take after confirmation. The shelf holds at most ten takes / 100 MB and never automatically deletes older recordings. A storage failure preserves the current audio so you can download it instead.
+
+Browser storage belongs to the exact local address, including its port. It survives reloads at that address, but a different service port, browser, profile or cleared browser storage makes it unavailable. Download important recordings for a permanent backup. No take audio is uploaded to a third-party service; the local service creates the MIDI blob.
+
+Play, New jam and Restore protect an unexported current recording with Keep and continue, Discard and continue, or Go back. A MIDI-only download does not mark the WAV as backed up. Leaving the page with an unprotected recording requests the browser’s standard leave-page warning; browsers may suppress that warning, particularly on mobile or forced termination.
+
 ## Timing and state
 
 Python composes data; the browser schedules oscillators and envelopes at absolute `AudioContext.currentTime` values. A 100 ms scheduler maintains roughly two to three bars ahead. Model requests run separately from HTTP/audio work. Playback reuses the current four-bar pattern until a validated replacement arrives.
@@ -93,7 +105,7 @@ Stop cancels pending composition and releases scheduled and sounding voices. The
 - The private launch link carries a token in its fragment, not an HTTP query. The browser removes the fragment and retains the token in session storage. Do not share that link. HTTP access logging is disabled.
 - Model credentials stay inside Hermes. No credential files, environment secrets, browser profiles or external credential stores are read by this plugin.
 - Music state and user directions/phrases are sent to the model configured by Hermes. No other network destination, analytics, telemetry or remote media is used.
-- Reads its own source assets and user-selected session JSON. Persists only its own profile-scoped state; exports download through the browser. No shell commands, self-updater or compiled payload.
+- Reads its own source assets and user-selected session JSON. Persists its own profile-scoped state and user-kept WAV/MIDI takes in local browser IndexedDB; exports download through the browser. No shell commands, self-updater or compiled payload.
 - Original procedural instruments; no third-party sample licensing required. Code is MIT.
 
 ## Verify and release

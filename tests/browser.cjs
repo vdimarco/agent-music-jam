@@ -45,7 +45,7 @@ fs.mkdirSync(artifacts,{recursive:true});
     }
     assert.equal(fs.readFileSync(path.join(artifacts,'take.wav')).subarray(0,4).toString(),'RIFF');
     assert.equal(fs.readFileSync(path.join(artifacts,'take.mid')).subarray(0,4).toString(),'MThd');
-    await page.locator('.close').click();
+    await page.locator('#exports .close').click();
     const save=page.waitForEvent('download');await page.locator('#save').click();await (await save).saveAs(path.join(artifacts,'session.json'));
     await page.locator('#restore-file').setInputFiles(path.join(artifacts,'session.json'));await page.waitForTimeout(900);
     assert.equal(await page.locator('#human-instrument').inputValue(),'pluck');assert.equal(await page.locator('#human-tone').inputValue(),'1');

@@ -1,0 +1,3 @@
+{"registered_tools": ["jam_start", "jam_inspect", "jam_stop", "jam_direct", "jam_configure", "jam_schedule", "jam_undo", "jam_save", "jam_restore", "jam_export"], "runtime": "real PluginContext, real tool registry"}
+{"host_model_conductor": "passed", "seconds": 3.17, "roles": ["drums"]}
+{"host_model_musician": "passed", "validated_events": 32}

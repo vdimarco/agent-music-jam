@@ -1,0 +1,27 @@
+name: agent-music-jam
+version: "0.1.0"
+description: "A live synthesized band with four role-scoped musician planners, audio-clock playback, human keyboard and MIDI input."
+manifest_version: 2
+api_version: 1
+requires_hermes: ">=0.23.0"
+license: MIT
+provides_tools:
+  - jam_start
+  - jam_inspect
+  - jam_stop
+  - jam_direct
+  - jam_configure
+  - jam_schedule
+  - jam_undo
+  - jam_save
+  - jam_restore
+  - jam_export
+config_schema:
+  port:
+    type: int
+    default: 0
+    description: "Loopback HTTP port; 0 selects an available port."
+  use_subagents:
+    type: bool
+    default: true
+    description: "Use Hermes child sessions for tool-launched musician planning. Browser requests use ctx.llm role planners."

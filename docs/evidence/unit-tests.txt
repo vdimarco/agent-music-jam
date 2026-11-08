@@ -1,0 +1,19 @@
+test_arrangement_returns_after_four_bars (test_engine.MusicTests.test_arrangement_returns_after_four_bars) ... ok
+test_ensemble_and_extreme_controls (test_engine.MusicTests.test_ensemble_and_extreme_controls) ... ok
+test_human_phrase (test_engine.MusicTests.test_human_phrase) ... ok
+test_midi_chunks_and_events (test_engine.MusicTests.test_midi_chunks_and_events) ... ok
+test_owner_and_frontier (test_engine.MusicTests.test_owner_and_frontier) ... ok
+test_reject_malformed_events (test_engine.MusicTests.test_reject_malformed_events) ... ok
+test_repeated_undo_walks_backwards (test_engine.MusicTests.test_repeated_undo_walks_backwards) ... ok
+test_restore_atomic_and_complete (test_engine.MusicTests.test_restore_atomic_and_complete) ... ok
+test_selective_undo (test_engine.MusicTests.test_selective_undo) ... ok
+test_slow_model_fallback_and_actual_boundary (test_engine.MusicTests.test_slow_model_fallback_and_actual_boundary) ... ok
+test_sound_settings_round_trip (test_engine.MusicTests.test_sound_settings_round_trip) ... ok
+test_stopped_planner_cannot_commit (test_engine.MusicTests.test_stopped_planner_cannot_commit) ... ok
+test_auth_and_origin (test_engine.ServiceTests.test_auth_and_origin) ... ok
+test_static_and_no_secret_in_save (test_engine.ServiceTests.test_static_and_no_secret_in_save) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 1.093s
+
+OK

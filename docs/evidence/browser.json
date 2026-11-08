@@ -1,0 +1,25 @@
+{
+  "metrics": {
+    "playing": true,
+    "clock": {
+      "bar": 8,
+      "beat": 1.1833777777777699,
+      "audio_time": 21.941333333333333,
+      "late_events": 0
+    },
+    "metrics": {
+      "late": 0,
+      "scheduled": 249,
+      "minLead": 0.28933333333333333
+    },
+    "bufferedSeconds": 7.054318840579718,
+    "voices": 67,
+    "samples": 1052672,
+    "takeBars": 11
+  },
+  "errors": [],
+  "restore": true,
+  "midi": true,
+  "wav": true,
+  "mobileOverflow": false
+}

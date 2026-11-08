@@ -1,0 +1,5 @@
+{"registered_tools": ["jam_start", "jam_inspect", "jam_stop", "jam_direct", "jam_configure", "jam_schedule", "jam_undo", "jam_save", "jam_restore", "jam_export"], "runtime": "real PluginContext, real tool registry"}
+{"real_tool": "jam_start", "result": "pass"}
+{"real_tool": "jam_inspect", "result": "pass"}
+{"real_tool": "jam_configure", "result": "pass"}
+{"real_tool": "jam_stop", "result": "pass"}

@@ -1,0 +1,55 @@
+{
+  "differences": [
+    {
+      "a": "piano",
+      "b": "electric",
+      "rmsDifference": 0.031528226314998686
+    },
+    {
+      "a": "piano",
+      "b": "organ",
+      "rmsDifference": 0.19537615507806413
+    },
+    {
+      "a": "piano",
+      "b": "pad",
+      "rmsDifference": 0.1707487898594286
+    },
+    {
+      "a": "piano",
+      "b": "pluck",
+      "rmsDifference": 0.04093965946140248
+    },
+    {
+      "a": "electric",
+      "b": "organ",
+      "rmsDifference": 0.2028956003824212
+    },
+    {
+      "a": "electric",
+      "b": "pad",
+      "rmsDifference": 0.16719148734391806
+    },
+    {
+      "a": "electric",
+      "b": "pluck",
+      "rmsDifference": 0.028954100066262922
+    },
+    {
+      "a": "organ",
+      "b": "pad",
+      "rmsDifference": 0.19768261077045474
+    },
+    {
+      "a": "organ",
+      "b": "pluck",
+      "rmsDifference": 0.21240403954428577
+    },
+    {
+      "a": "pad",
+      "b": "pluck",
+      "rmsDifference": 0.1708862278854761
+    }
+  ],
+  "toneRmsDifference": 0.0857191238556574
+}

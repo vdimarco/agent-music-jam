@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+work/
+node_modules/
+*.wav
+*.mid
+*.mp4

@@ -1,0 +1,32 @@
+[
+  {
+    "track": "tempo",
+    "noteOns": 0,
+    "danglingNotes": 0
+  },
+  {
+    "track": "drums",
+    "noteOns": 167,
+    "danglingNotes": 0
+  },
+  {
+    "track": "bass",
+    "noteOns": 54,
+    "danglingNotes": 0
+  },
+  {
+    "track": "keys",
+    "noteOns": 128,
+    "danglingNotes": 0
+  },
+  {
+    "track": "lead",
+    "noteOns": 14,
+    "danglingNotes": 0
+  },
+  {
+    "track": "human",
+    "noteOns": 7,
+    "danglingNotes": 0
+  }
+]
